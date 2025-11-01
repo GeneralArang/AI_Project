@@ -36,4 +36,4 @@ To develop an AI-based gesture control system that uses body movements as input 
 | AI Engineer |  | Model Design |
 | Vision Engineer |  | Video Stream Processing |
 | Effect Designer |  | Visual Effects |
-| Documenter |  | README & Presentation |
+
