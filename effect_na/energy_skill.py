@@ -17,7 +17,6 @@ MODEL_XML = "intel/human-pose-estimation-0005/FP32/human-pose-estimation-0005.xm
 DEVICE = "AUTO"
 CONF_KPT = 0.2
 MAX_HANDS = 4
-MIRROR = False
 
 ANIM_DIR_GLOB = "hand_anim/eff_1PNG/*.png"
 ANIM_SIZE = (160, 160)
@@ -171,9 +170,9 @@ class RightHandSkill:
             self.active=False
 
 # =========================
-# ✅ GUI에서 호출할 함수
+#  GUI에서 호출할 함수
 # =========================
-def run_energy_skill(video_label, cam_index=0):
+def run_energy_skill(video_label, cam_index=0, mirror=False):
     pose = OpenVinoPose()
     hands = MediaPipeHands()
     skill = RightHandSkill()
@@ -186,7 +185,7 @@ def run_energy_skill(video_label, cam_index=0):
         if not ok:
             return
 
-        if MIRROR:
+        if mirror:
             frame = cv2.flip(frame,1)
 
         h,w = frame.shape[:2]
@@ -205,7 +204,7 @@ def run_energy_skill(video_label, cam_index=0):
         if res.multi_hand_landmarks:
             for lm,hd in zip(res.multi_hand_landmarks,res.multi_handedness):
 
-                # ✅ 손 랜드마크 시각화
+                #  손 랜드마크 시각화
                 hands.drawer.draw_landmarks(
                     frame,
                     lm,
@@ -214,7 +213,7 @@ def run_energy_skill(video_label, cam_index=0):
                     hands.drawer.DrawingSpec(color=(0,255,0), thickness=2)
                 )
 
-                # ✅ 오른손만 사용
+                #  오른손만 사용
                 label = hd.classification[0].label.lower().strip()
                 if label != "right":
                     continue
@@ -233,7 +232,7 @@ def run_energy_skill(video_label, cam_index=0):
 
     return update
 
-def run_energy_skill_tk(video_label, cam_index=0):
+def run_energy_skill_tk(video_label, cam_index=0, mirror=False):
     pose = OpenVinoPose()
     hands = MediaPipeHands()
     skill = RightHandSkill()
@@ -245,12 +244,12 @@ def run_energy_skill_tk(video_label, cam_index=0):
             return
 
         # 좌우반전 옵션
-        if MIRROR:
+        if mirror:
             frame = cv2.flip(frame, 1)
 
         h, w = frame.shape[:2]
 
-        # ✅ Pose (OpenVINO)
+        #  Pose (OpenVINO)
         out = pose.infer(frame)
         kpts = pose.extract_keypoints(out, w, h)
         for a, b in POSE_PAIRS:
@@ -259,7 +258,7 @@ def run_energy_skill_tk(video_label, cam_index=0):
                 if ka.conf > CONF_KPT and kb.conf > CONF_KPT:
                     cv2.line(frame, (ka.x, ka.y), (kb.x, kb.y), (0, 255, 0), 2)
 
-        # ✅ MediaPipe Hands
+        #  MediaPipe Hands
         res = hands.process(frame)
         if res.multi_hand_landmarks:
             for lm, hd in zip(res.multi_hand_landmarks, res.multi_handedness):
@@ -276,7 +275,7 @@ def run_energy_skill_tk(video_label, cam_index=0):
                     skill.update(stable)
                     skill.draw(frame, lm, w, h)
 
-        # ✅ Tkinter 출력 부분 (핵심 변경)
+        #  Tkinter 출력 부분 (핵심 변경)
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         img = Image.fromarray(rgb)
         imgtk = ImageTk.PhotoImage(image=img)
