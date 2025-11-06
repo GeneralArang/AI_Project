@@ -6,42 +6,8 @@ from tkinter import ttk
 from PySide6.QtWidgets import QApplication, QLabel
 from PySide6.QtCore import Qt
 
-from energy_skill import run_energy_skill   # ✅ 기존 함수 그대로 사용
+from energy_skill import run_energy_skill_tk   # ✅ 기존 함수 그대로 사용
 from PySide6.QtCore import QTimer
-
-class VideoWindow:
-    def __init__(self, tk_parent, w=1280, h=720, cam_index=0):
-        self.tk_parent = tk_parent
-
-        self.qt_app = QApplication.instance()
-        if not self.qt_app:
-            self.qt_app = QApplication(sys.argv)
-
-        self.label = QLabel()
-        self.label.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-        self.label.setStyleSheet("background-color:black;")
-        self.label.resize(w, h)
-        self.center_video(w, h)
-        self.label.show()
-
-        # ✅ run_energy_skill 그대로 호출
-        self.update_fn = run_energy_skill(self.label, cam_index)
-
-        # ✅ PySide6 QTimer로 60fps 갱신
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_frame)
-        self.timer.start(16)
-
-    def center_video(self, w, h):
-        self.tk_parent.update_idletasks()
-        x = self.tk_parent.winfo_rootx() + (self.tk_parent.winfo_width() - w) // 2
-        y = self.tk_parent.winfo_rooty() + (self.tk_parent.winfo_height() - h) // 2
-        self.label.setGeometry(x, y, w, h)
-
-    def update_frame(self):
-        self.update_fn()
-        self.center_video(self.label.width(), self.label.height())
-        QApplication.processEvents()
 
 
 # ======================================
@@ -120,28 +86,24 @@ class MainScene(tk.Frame):
     def __init__(self, master):
         super().__init__(master, bg="#1e1e2e")
 
-        label = tk.Label(self, text="Press to Start Camera",
-                         font=("Arial", 26), fg="white", bg="#1e1e2e")
-        label.pack(pady=80)
+        self.video_label = tk.Label(self, bg="black")
+        self.video_label.place(relx=0.5, rely=0.38, anchor="center", width=1060, height=600)
 
-        btn = tk.Button(self,
-                        text="Start Energy Skill",
-                        font=("Arial", 22, "bold"),
-                        bg="#8a2be2", fg="white",
-                        command=self.start_video)
-        btn.pack(pady=30)
+        self.btn = tk.Button(self, text="Start Energy Skill", font=("Arial", 20, "bold"),
+                             bg="#8a2be2", fg="white", width=18, height=2,
+                             command=self.start_skill)
+        self.btn.place(relx=0.5, rely=0.88, anchor="center")
 
-        self.video = None
+        self.update_fn = None
 
-    def start_video(self):
-        if self.video is None:
-            # ✅ 여기서 PySide6 영상창 실행!
-            self.video = VideoWindow(
-                self.master,
-                w=1180, h=660,
-                cam_index=4
-            )
+    def start_skill(self):
+        self.update_fn = run_energy_skill_tk(self.video_label, cam_index=4)
+        self.update_video()
 
+    def update_video(self):
+        if self.update_fn:
+            self.update_fn()
+        self.after(16, self.update_video)
 
 # ======================================
 # ✅ 실행
