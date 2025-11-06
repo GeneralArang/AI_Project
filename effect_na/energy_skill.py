@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import List
 from openvino.runtime import Core, CompiledModel
 from PySide6.QtGui import QImage, QPixmap
+from PIL import Image, ImageTk
 
 # =========================
 # 설정
@@ -232,3 +233,55 @@ def run_energy_skill(video_label, cam_index=0):
 
     return update
 
+def run_energy_skill_tk(video_label, cam_index=0):
+    pose = OpenVinoPose()
+    hands = MediaPipeHands()
+    skill = RightHandSkill()
+    cap = cv2.VideoCapture(cam_index)
+
+    def update():
+        ok, frame = cap.read()
+        if not ok:
+            return
+
+        # 좌우반전 옵션
+        if MIRROR:
+            frame = cv2.flip(frame, 1)
+
+        h, w = frame.shape[:2]
+
+        # ✅ Pose (OpenVINO)
+        out = pose.infer(frame)
+        kpts = pose.extract_keypoints(out, w, h)
+        for a, b in POSE_PAIRS:
+            if a < len(kpts) and b < len(kpts):
+                ka, kb = kpts[a], kpts[b]
+                if ka.conf > CONF_KPT and kb.conf > CONF_KPT:
+                    cv2.line(frame, (ka.x, ka.y), (kb.x, kb.y), (0, 255, 0), 2)
+
+        # ✅ MediaPipe Hands
+        res = hands.process(frame)
+        if res.multi_hand_landmarks:
+            for lm, hd in zip(res.multi_hand_landmarks, res.multi_handedness):
+                hands.drawer.draw_landmarks(
+                    frame, lm,
+                    hands.mp.HAND_CONNECTIONS,
+                    mp.solutions.drawing_styles.get_default_hand_landmarks_style(),
+                    mp.solutions.drawing_styles.get_default_hand_connections_style()
+                )
+
+                if hd.classification[0].label.lower().strip() == "right":
+                    raw = detect_fist_ratio(lm, w, h)
+                    stable = skill.stable(raw)
+                    skill.update(stable)
+                    skill.draw(frame, lm, w, h)
+
+        # ✅ Tkinter 출력 부분 (핵심 변경)
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = Image.fromarray(rgb)
+        imgtk = ImageTk.PhotoImage(image=img)
+
+        video_label.imgtk = imgtk
+        video_label.config(image=imgtk)
+
+    return update
