@@ -3,9 +3,8 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 
-from energy_skill import run_energy_skill_tk   # ✅ 기존 함수 그대로 사용
-
-
+from energy_skill import run_energy_skill_tk   
+from hand_human_lightsaber import run_lightsaber_tk  
 
 class App(tk.Tk):
     def __init__(self):
@@ -96,13 +95,21 @@ class MainScene(tk.Frame):
         )
         self.after(100, self.place_settings_button)
 
-        self.start_btn = tk.Button(
+        self.energy_skill_btn = tk.Button(
             self, text="Start Energy Skill",
             font=("Arial", 20, "bold"),
             bg="#8a2be2", fg="white",
             command=self.start_skill
         )
-        self.start_btn.place(relx=0.5, rely=0.80, anchor="center")
+        self.energy_skill_btn.place(relx=0.3, rely=0.80)
+
+        self.lightsaber_btn = tk.Button(
+            self, text="Start Lightsaber",
+            font=("Arial", 20, "bold"),
+            bg="#8a2be2", fg="white",
+            command=self.start_lightsaber
+        )
+        self.lightsaber_btn.place(relx=0.6, rely=0.80)
 
         self.stop_btn = tk.Button(
             self, text="Stop",
@@ -110,7 +117,7 @@ class MainScene(tk.Frame):
             bg="#c0392b", fg="white",
             command=self.stop_skill
         )
-        self.stop_btn.place(relx=0.5, rely=0.88, anchor="center")
+        self.stop_btn.place(relx=0.9, rely=0.80)
 
         # ✅ 상태
         self.update_fn = None
@@ -142,6 +149,28 @@ class MainScene(tk.Frame):
 
         self.running = True
         self.update_video()
+
+    def start_lightsaber(self):
+        # ✅ 먼저 확실하게 초기화
+        self.running = False
+        self.update_fn = None
+
+        # ✅ 예외 안전하게 VideoCapture 생성
+        try:
+            self.update_fn = run_lightsaber_tk(
+                self.video_label,
+                cam_index=self.master.cam_index,
+                mirror=self.master.mirror_on
+            )
+        except Exception as e:
+            print("Camera start error:", e)
+            self.video_label.config(image="", bg="black")
+            self.update_fn = None
+            return
+
+        self.running = True
+        self.update_video()
+
 
     def update_video(self):
         # after 루프가 중복되거나 고아 프로세스 되는 걸 방지
