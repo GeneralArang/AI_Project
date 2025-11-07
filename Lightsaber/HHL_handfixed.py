@@ -11,7 +11,7 @@ from openvino.runtime import Core, CompiledModel
 # =========================
 # 설정
 # =========================
-MODEL_XML = "workspace/open_model_zoo/demos/human_pose_estimation_demo/python/intel/human-pose-estimation-0005/FP32/human-pose-estimation-0005.xml"
+MODEL_XML = "/home/dx08/workspace/open_model_zoo/demos/human_pose_estimation_demo/python/intel/human-pose-estimation-0005/FP32/human-pose-estimation-0005.xml"
 DEVICE = "AUTO"          # "CPU", "GPU", "AUTO" 등
 CAM_INDEX = 4           # 카메라 인덱스
 
@@ -280,35 +280,48 @@ def get_hand_regions_from_wrist(kpts: Keypoints, img_w: int, img_h: int, size: i
 # =========================
 # PNG 오버레이 안전 버전 이미지 아래쪽을 붙이는 코드
 # =========================
-
-def overlay_png(img, png, center_x, center_y):
-    """
-    img: 배경 (BGR)
-    png: 오버레이할 PNG (BGRA)
-    center_x, center_y: PNG의 하단 중앙이 맞춰질 기준점 (예: 오른손 5번 좌표)
-    """
+def overlay_png_rotate_bottom_center(img, png, p5, p17):
     ph, pw = png.shape[:2]
 
-    # ===== PNG 하단 중앙을 손 좌표에 맞춤 =====
-    x1 = int(center_x - pw / 2)
-    y2 = int(center_y)             # 손 좌표가 PNG의 하단
-    x2 = x1 + pw
-    y1 = int(y2 - ph)              # PNG 높이만큼 위로 이동
-    # ==========================================
+    # 방향 계산
+    dx, dy = p17[0] - p5[0], p17[1] - p5[1]
+    angle = math.degrees(math.atan2(dy, dx))
+    center = (pw / 2, ph)
 
-    # ===== 화면 범위 보정 =====
+    # ===== 채널 분리 (4채널 안전 회전) =====
+    if png.shape[2] == 4:
+        b, g, r, a = cv2.split(png)
+        rgb = cv2.merge((b, g, r))
+    else:
+        rgb = png
+        a = np.ones((ph, pw), np.uint8) * 255
+
+    # ===== 회전 행렬 =====
+    rot_mat = cv2.getRotationMatrix2D(center, -(angle - 90), 1.0)
+
+    # ===== RGB와 Alpha를 따로 회전 (INTER_AREA로 노이즈 최소화) =====
+    rgb_rot = cv2.warpAffine(rgb, rot_mat, (pw, ph), flags=cv2.INTER_AREA, borderMode=cv2.BORDER_CONSTANT, borderValue=(0,0,0))
+    a_rot   = cv2.warpAffine(a,   rot_mat, (pw, ph), flags=cv2.INTER_AREA, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+
+    # ===== 마스크 후처리 (노이즈 줄이기) =====
+    a_rot = cv2.GaussianBlur(a_rot, (3, 3), 0)
+
+    rotated = cv2.merge((rgb_rot, a_rot))
+
+    # ===== 오버레이 위치 =====
+    x1 = int(p5[0] - pw / 2)
+    y1 = int(p5[1] - ph)
+    x2, y2 = x1 + pw, y1 + ph
     h, w = img.shape[:2]
     if x2 <= 0 or y2 <= 0 or x1 >= w or y1 >= h:
         return img
 
-    # 안전한 클램프 (화면을 벗어나는 부분 자르기)
     x1c, y1c = max(0, x1), max(0, y1)
     x2c, y2c = min(w, x2), min(h, y2)
-
+    png_crop = rotated[(y1c - y1):(y2c - y1), (x1c - x1):(x2c - x1)]
     roi = img[y1c:y2c, x1c:x2c]
-    png_crop = png[(y1c - y1):(y2c - y1), (x1c - x1):(x2c - x1)]
 
-    # ===== BGRA 분리 및 마스크 처리 =====
+    # ===== 알파 합성 =====
     if png_crop.shape[2] == 4:
         b, g, r, a = cv2.split(png_crop)
         overlay = cv2.merge((b, g, r))
@@ -317,11 +330,8 @@ def overlay_png(img, png, center_x, center_y):
         overlay = png_crop
         mask = np.ones_like(overlay, dtype=np.float32)
 
-    # ===== 합성 =====
     img[y1c:y2c, x1c:x2c] = (roi * (1 - mask) + overlay * mask).astype(np.uint8)
-
     return img
-
 
 
 
@@ -342,7 +352,6 @@ def main():
     frame_files = sorted(glob.glob("datasets/LightsaberPNG/ezgif-frame-*.png"))
     if not frame_files:
         raise FileNotFoundError("⚠️ PNG 프레임 파일을 찾을 수 없습니다.")
-
     print(f"🔹 {len(frame_files)}개의 PNG 프레임을 로드했습니다.")
 
     overlay_frames = []
@@ -354,14 +363,10 @@ def main():
         overlay_frames.append(img)
 
     total_frames = len(overlay_frames)
-    frame_idx = 0  # 현재 오버레이 프레임 인덱스
-
-    # 🔧 이미지 스케일 조절 관련 변수 (여기에 추가)
+    frame_idx = 0
     scale = 1.0
     SCALE_STEP = 0.1
-    MIN_SCALE  = 0.25
-    MAX_SCALE  = 3.0
-
+    MIN_SCALE, MAX_SCALE = 0.25, 3.0
 
     cap = cv2.VideoCapture(CAM_INDEX)
     prev_t = 0.0
@@ -376,7 +381,7 @@ def main():
         out = pose.infer(frame)
         body_kpts = pose.extract_keypoints(out, w, h)
         viz = Visualizer()
-        viz.draw_skeleton(frame, body_kpts, (0,255,0))
+        viz.draw_skeleton(frame, body_kpts, (0, 255, 0))
 
         # ============= 손 추정 (MediaPipe) =========
         results = hands.process(frame)
@@ -390,14 +395,35 @@ def main():
                 right_hand_kpts = [Keypoint(lm.x * w, lm.y * h, 1.0) for lm in hand_lm.landmark]
                 break
 
-        # ============= 53장 중 현재 프레임 표시 =============
-        if right_hand_kpts and len(right_hand_kpts) > 5:
-            x, y = int(right_hand_kpts[5].x), int(right_hand_kpts[5].y)
+        # ==============================
+        # 라이트세이버 오버레이 처리
+        # ==============================
+        if right_hand_kpts and len(right_hand_kpts) > 17:
+            # ---- 손의 주요 점 ----
+            p5 = (int(right_hand_kpts[5].x), int(right_hand_kpts[5].y))
+            p17 = (int(right_hand_kpts[17].x), int(right_hand_kpts[17].y))
 
-            # 🔧 현재 프레임 가져오기
+            # ---- 직선 시각화 ----
+            cv2.line(frame, p5, p17, (0, 255, 255), 2)
+            cv2.circle(frame, p5, 5, (0, 0, 255), -1)  # 5번 (빨강)
+            cv2.circle(frame, p17, 5, (255, 0, 0), -1) # 17번 (파랑)
+
+            # ---- 방향 벡터 (5→17)
+            dx, dy = p17[0] - p5[0], p17[1] - p5[1]
+            length = math.hypot(dx, dy)
+            if length == 0:
+                length = 1
+            dir_x, dir_y = dx / length, dy / length
+
+            # ---- 여기서 offset 제거
+            # 단지 반대 방향의 연장선만 시각적으로 표시
+            line_len = 200
+            end_x = int(p5[0] - dir_x * line_len)
+            end_y = int(p5[1] - dir_y * line_len)
+            cv2.line(frame, p5, (end_x, end_y), (0, 255, 0), 2)  # 연장선 표시
+
+            # ---- 스케일 조정 ----
             base = overlay_frames[frame_idx]
-
-            # 🔧 스케일 조절
             if scale != 1.0:
                 new_w = max(1, int(base.shape[1] * scale))
                 new_h = max(1, int(base.shape[0] * scale))
@@ -405,11 +431,14 @@ def main():
             else:
                 overlay_img = base
 
-            # 🔧 오버레이
-            frame = overlay_png(frame, overlay_img, x, y)
-            
+            # ---- 오버레이 (하단 중앙이 p5) ----
+            frame = overlay_png_rotate_bottom_center(frame, overlay_img, p5, p17)
 
-            # 다음 프레임으로 이동 (53장 반복)
+
+
+            # ---- 디버그 표시 ----
+            cv2.putText(frame, "bottom_center=p5", (p5[0] + 10, p5[1] - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
             frame_idx = (frame_idx + 1) % total_frames
 
         # ============= FPS 표시 =============
@@ -417,27 +446,22 @@ def main():
         fps = 1.0 / (now - prev_t) if prev_t else 0.0
         prev_t = now
         cv2.putText(frame, f"FPS: {int(fps)}", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
         # ============= 출력 =============
         cv2.imshow("Full Body + Hand Pose + Lightsaber Animation", frame)
         key = cv2.waitKey(1) & 0xFF
         if key == 27:  # ESC 종료
             break
-        elif key in (ord('-'), ord('_')):  # 🔻 작게
+        elif key in (ord('-'), ord('_')):  # 🔻 축소
             scale = max(MIN_SCALE, round(scale - SCALE_STEP, 2))
             print(f"🔻 이미지 축소: scale={scale}")
-        elif key in (ord('='), ord('+')):  # 🔺 크게
+        elif key in (ord('='), ord('+')):  # 🔺 확대
             scale = min(MAX_SCALE, round(scale + SCALE_STEP, 2))
             print(f"🔺 이미지 확대: scale={scale}")
 
-
     cap.release()
     cv2.destroyAllWindows()
-
-
-
-
 
 if __name__ == "__main__":
     main()
