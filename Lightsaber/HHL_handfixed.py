@@ -281,43 +281,69 @@ def get_hand_regions_from_wrist(kpts: Keypoints, img_w: int, img_h: int, size: i
 # PNG 오버레이 안전 버전 이미지 아래쪽을 붙이는 코드
 # =========================
 def overlay_png_rotate_bottom_center(img, png, p5, p17):
-    ph, pw = png.shape[:2]
+    """
+    회전 중심: 원본 PNG의 하단 중앙 (bottom-center)
+    p5: 손의 5번 좌표와 이미지의 하단 중앙을 일치
+    p17: 방향 계산 (5→17)
+    - 회전 시 이미지가 잘리지 않도록 캔버스를 확장
+    - 회전 후에도 bottom-center가 정확히 p5에 맞게 유지
+    """
+    ph0, pw0 = png.shape[:2]
 
-    # 방향 계산
+    # ===== 방향 벡터 및 각도 계산 =====
     dx, dy = p17[0] - p5[0], p17[1] - p5[1]
     angle = math.degrees(math.atan2(dy, dx))
-    center = (pw / 2, ph)
+    rot_deg = -(angle - 90)
 
-    # ===== 채널 분리 (4채널 안전 회전) =====
+    # ===== 채널 분리 =====
     if png.shape[2] == 4:
         b, g, r, a = cv2.split(png)
         rgb = cv2.merge((b, g, r))
     else:
         rgb = png
-        a = np.ones((ph, pw), np.uint8) * 255
+        a = np.full((ph0, pw0), 255, np.uint8)
 
-    # ===== 회전 행렬 =====
-    rot_mat = cv2.getRotationMatrix2D(center, -(angle - 90), 1.0)
+    # ===== 캔버스 확장 (잘림 방지용 여백 추가) =====
+    margin = max(ph0, pw0)
+    pad = cv2.copyMakeBorder(png, margin, margin, margin, margin, cv2.BORDER_CONSTANT, value=[0, 0, 0, 0])
+    ph, pw = pad.shape[:2]
 
-    # ===== RGB와 Alpha를 따로 회전 (INTER_AREA로 노이즈 최소화) =====
-    rgb_rot = cv2.warpAffine(rgb, rot_mat, (pw, ph), flags=cv2.INTER_AREA, borderMode=cv2.BORDER_CONSTANT, borderValue=(0,0,0))
-    a_rot   = cv2.warpAffine(a,   rot_mat, (pw, ph), flags=cv2.INTER_AREA, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+    # ===== 새 앵커 (확장된 하단 중앙) =====
+    anchor = (pw / 2, ph - margin)
 
-    # ===== 마스크 후처리 (노이즈 줄이기) =====
-    a_rot = cv2.GaussianBlur(a_rot, (3, 3), 0)
+    # ===== 회전 후 bounding box 크기 계산 =====
+    rad = math.radians(rot_deg)
+    c, s = abs(math.cos(rad)), abs(math.sin(rad))
+    new_w = int(pw * c + ph * s)
+    new_h = int(pw * s + ph * c)
 
-    rotated = cv2.merge((rgb_rot, a_rot))
+    # ===== 회전 행렬 + 중심 보정 =====
+    M = cv2.getRotationMatrix2D(anchor, rot_deg, 1.0)
+    M[0, 2] += (new_w / 2) - anchor[0]
+    M[1, 2] += (new_h / 2) - anchor[1]
 
-    # ===== 오버레이 위치 =====
-    x1 = int(p5[0] - pw / 2)
-    y1 = int(p5[1] - ph)
-    x2, y2 = x1 + pw, y1 + ph
-    h, w = img.shape[:2]
-    if x2 <= 0 or y2 <= 0 or x1 >= w or y1 >= h:
+    # ===== 회전 수행 =====
+    rotated = cv2.warpAffine(pad, M, (new_w, new_h),
+                             flags=cv2.INTER_AREA,
+                             borderMode=cv2.BORDER_CONSTANT,
+                             borderValue=(0, 0, 0, 0))
+
+    # ===== 회전 후 앵커 좌표 계산 (진짜 하단 중앙점이 어디 있는지) =====
+    ax = M[0, 0] * anchor[0] + M[0, 1] * anchor[1] + M[0, 2]
+    ay = M[1, 0] * anchor[0] + M[1, 1] * anchor[1] + M[1, 2]
+
+    # ===== p5와 (ax, ay)를 일치시켜 오버레이 =====
+    x1 = int(p5[0] - ax)
+    y1 = int(p5[1] - ay)
+    x2, y2 = x1 + new_w, y1 + new_h
+
+    # ===== 화면 클램프 =====
+    H, W = img.shape[:2]
+    if x2 <= 0 or y2 <= 0 or x1 >= W or y1 >= H:
         return img
 
     x1c, y1c = max(0, x1), max(0, y1)
-    x2c, y2c = min(w, x2), min(h, y2)
+    x2c, y2c = min(W, x2), min(H, y2)
     png_crop = rotated[(y1c - y1):(y2c - y1), (x1c - x1):(x2c - x1)]
     roi = img[y1c:y2c, x1c:x2c]
 
@@ -364,7 +390,7 @@ def main():
 
     total_frames = len(overlay_frames)
     frame_idx = 0
-    scale = 1.0
+    scale = 0.45
     SCALE_STEP = 0.1
     MIN_SCALE, MAX_SCALE = 0.25, 3.0
 
