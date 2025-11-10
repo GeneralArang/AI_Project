@@ -3,20 +3,21 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 
-from energy_skill import run_energy_skill_tk   
-from hand_human_lightsaber import run_lightsaber_tk  
+from energy_skill_handfix import run_energy_skill_tk   
+from HHL_handfixed_module import run_lightsaber_tk 
+from fire_effect_module import run_fire_skill_tk 
 
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Energy Skill Tk GUI")
+        self.title("VisionPulse-Gesture Vision Impact")
         self.geometry("1280x800")
 
-        # ✅ 설정 값 기본
+        # 설정 값 기본
         self.cam_index = 0
         self.mirror_on = False
 
-        # ✅ 씬 생성
+        # 씬 생성
         self.title_scene = TitleScene(self)
         self.loading_scene = LoadingScene(self)
         self.main_scene = MainScene(self)
@@ -32,12 +33,12 @@ class App(tk.Tk):
         scene.tkraise()
 
 
-# ✅ Scene 1: Title
+# Scene 1: Title
 class TitleScene(tk.Frame):
     def __init__(self, master):
         super().__init__(master, bg="#1b1b2f")
 
-        tk.Label(self, text="ENERGY SKILL",
+        tk.Label(self, text="VisionPulse\n Gesture Vision Impact",
                  fg="white", bg="#1b1b2f",
                  font=("Arial", 48, "bold")).pack(pady=200)
 
@@ -51,7 +52,7 @@ class TitleScene(tk.Frame):
         self.master.loading_scene.start_loading()
 
 
-# ✅ Scene 2: Loading
+# Scene 2: Loading
 class LoadingScene(tk.Frame):
     def __init__(self, master):
         super().__init__(master, bg="#0f0f17")
@@ -76,7 +77,7 @@ class LoadingScene(tk.Frame):
             self.after(30, self.loading)
 
 
-# ✅ Scene 3: Main
+# Scene 3: Main
 class MainScene(tk.Frame):
     def __init__(self, master):
         super().__init__(master, bg="#1e1e2e")
@@ -96,20 +97,28 @@ class MainScene(tk.Frame):
         self.after(100, self.place_settings_button)
 
         self.energy_skill_btn = tk.Button(
-            self, text="Start Energy Skill",
+            self, text="Energy Effect",
             font=("Arial", 20, "bold"),
             bg="#8a2be2", fg="white",
-            command=self.start_skill
+            command=self.start_energy_skill
         )
-        self.energy_skill_btn.place(relx=0.3, rely=0.80)
+        self.energy_skill_btn.place(relx=0.1, rely=0.80)
+
+        self.fire_skill_btn = tk.Button(
+            self, text="Fire Effect",
+            font=("Arial", 20, "bold"),
+            bg="#8a2be2", fg="white",
+            command=self.start_fire_skill
+        )
+        self.fire_skill_btn.place(relx=0.3, rely=0.80)
 
         self.lightsaber_btn = tk.Button(
-            self, text="Start Lightsaber",
+            self, text="Lightsaber",
             font=("Arial", 20, "bold"),
             bg="#8a2be2", fg="white",
             command=self.start_lightsaber
         )
-        self.lightsaber_btn.place(relx=0.6, rely=0.80)
+        self.lightsaber_btn.place(relx=0.5, rely=0.80)
 
         self.stop_btn = tk.Button(
             self, text="Stop",
@@ -119,7 +128,7 @@ class MainScene(tk.Frame):
         )
         self.stop_btn.place(relx=0.9, rely=0.80)
 
-        # ✅ 상태
+        # 상태
         self.update_fn = None
         self.running = False
 
@@ -129,12 +138,12 @@ class MainScene(tk.Frame):
         vw = self.video_label.winfo_width()
         self.settings_btn.place(x=vx + vw - 100, y=vy + 10)
 
-    def start_skill(self):
-        # ✅ 먼저 확실하게 초기화
+    def start_energy_skill(self):
+        # 먼저 확실하게 초기화
         self.running = False
         self.update_fn = None
 
-        # ✅ 예외 안전하게 VideoCapture 생성
+        # 예외 안전하게 VideoCapture 생성
         try:
             self.update_fn = run_energy_skill_tk(
                 self.video_label,
@@ -150,12 +159,33 @@ class MainScene(tk.Frame):
         self.running = True
         self.update_video()
 
-    def start_lightsaber(self):
-        # ✅ 먼저 확실하게 초기화
+    def start_fire_skill(self):
+        # 먼저 확실하게 초기화
         self.running = False
         self.update_fn = None
 
-        # ✅ 예외 안전하게 VideoCapture 생성
+        # 예외 안전하게 VideoCapture 생성
+        try:
+            self.update_fn = run_fire_skill_tk(
+                self.video_label,
+                cam_index=self.master.cam_index,
+                mirror=self.master.mirror_on
+            )
+        except Exception as e:
+            print("Camera start error:", e)
+            self.video_label.config(image="", bg="black")
+            self.update_fn = None
+            return
+
+        self.running = True
+        self.update_video()
+
+    def start_lightsaber(self):
+        # 먼저 확실하게 초기화
+        self.running = False
+        self.update_fn = None
+
+        # 예외 안전하게 VideoCapture 생성
         try:
             self.update_fn = run_lightsaber_tk(
                 self.video_label,
@@ -179,7 +209,7 @@ class MainScene(tk.Frame):
                 self.update_fn()
             except Exception as e:
                 print("Runtime error:", e)
-                self.stop_skill()   # ✅ 오류 발생하면 강제로 정지
+                self.stop_skill()   # 오류 발생하면 강제로 정지
                 return
 
         if self.running:
@@ -192,12 +222,12 @@ class MainScene(tk.Frame):
         self.video_label.imgtk = None
 
     def open_settings(self):
-        self.stop_skill()  # ✅ 설정 들어갈 때도 확실히 정지
+        self.stop_skill()  # 설정 들어갈 때도 확실히 정지
         self.master.show_scene(self.master.setting_scene)
 
         self.master.show_scene(self.master.setting_scene)
 
-# ✅ Scene 4: Settings
+# Scene 4: Settings
 class SettingScene(tk.Frame):
     def __init__(self, master):
         super().__init__(master, bg="#111")
@@ -206,7 +236,7 @@ class SettingScene(tk.Frame):
                  font=("Arial", 40, "bold"),
                  bg="#111", fg="white").pack(pady=40)
 
-        # ✅ Camera Index 선택: ComboBox
+        # Camera Index 선택: ComboBox
         tk.Label(self, text="Camera Index",
                  bg="#111", fg="white", font=("Arial", 18)).pack(pady=10)
 
@@ -215,25 +245,25 @@ class SettingScene(tk.Frame):
         self.cam_box.current(0)
         self.cam_box.pack()
 
-        # ✅ Mirror 체크
+        # Mirror 체크
         self.mirror_var = tk.BooleanVar()
         tk.Checkbutton(self, text="Mirror Mode", variable=self.mirror_var,
                        font=("Arial", 18), bg="#111", fg="white",
                        selectcolor="#222").pack(pady=20)
 
-        # ✅ Save 버튼
+        # Save 버튼
         tk.Button(self, text="Save",
                   font=("Arial", 20, "bold"),
                   bg="#8a2be2", fg="white",
                   command=self.save).pack(pady=20)
 
-        # ✅ Back 버튼
+        # Back 버튼
         tk.Button(self, text="Back",
                   font=("Arial", 18),
                   bg="#444", fg="white",
                   command=self.back).pack(pady=10)
 
-        # ✅ 저장 상태 표시용
+        # 저장 상태 표시용
         self.status_label = tk.Label(self, text="", bg="#111", fg="#aaa", font=("Arial", 14))
         self.status_label.pack(pady=10)
 
@@ -254,7 +284,7 @@ class SettingScene(tk.Frame):
         self.master.show_scene(self.master.main_scene)
 
 
-# ✅ 실행
+# 실행
 if __name__ == "__main__":
     app = App()
     app.mainloop()
