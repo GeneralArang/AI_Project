@@ -3,7 +3,7 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 
-from energy_skill import run_energy_skill_tk   
+from gyeongjun_eff import run_energy_skill_tk   
 from hand_human_lightsaber import run_lightsaber_tk  
 
 class App(tk.Tk):
