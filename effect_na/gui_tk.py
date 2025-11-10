@@ -3,9 +3,9 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 
-from energy_skill_handfix import run_energy_skill_tk   
-from HHL_handfixed_module import run_lightsaber_tk 
-from fire_effect_module import run_fire_skill_tk 
+from gyeongjun_eff import run_energy_skill_tk   
+from hand_human_lightsaber import run_lightsaber_tk  
+
 
 class App(tk.Tk):
     def __init__(self):
