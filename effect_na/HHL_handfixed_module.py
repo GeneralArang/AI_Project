@@ -405,7 +405,7 @@ def _process_one_frame(frame, pose, hands, viz, overlay_frames, state: SaberStat
 # =========================
 # 초기화 (모델/PNG 로드)
 # =========================
-def init_lightsaber(png_glob="datasets/LightsaberPNG/ezgif-frame-*.png"):
+def init_lightsaber(png_glob="hand_anim/LightsaberPNG/ezgif-frame-*.png"):
     pose = OpenVinoPose(MODEL_XML, DEVICE)
     hands = MediaPipeHands(MAX_HANDS)
     viz = Visualizer()

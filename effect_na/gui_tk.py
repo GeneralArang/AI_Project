@@ -3,9 +3,10 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 
-from gyeongjun_eff import run_energy_skill_tk   
-from hand_human_lightsaber import run_lightsaber_tk  
-
+from energy_skill_handfix import run_energy_skill_tk   
+from HHL_handfixed_module import run_lightsaber_tk 
+from fire_effect_module import run_fire_skill_tk 
+from finger_shot import run_hand_gun_skill_tk
 
 class App(tk.Tk):
     def __init__(self):
@@ -102,7 +103,7 @@ class MainScene(tk.Frame):
             bg="#8a2be2", fg="white",
             command=self.start_energy_skill
         )
-        self.energy_skill_btn.place(relx=0.1, rely=0.80)
+        self.energy_skill_btn.place(relx=0.086, rely=0.80)
 
         self.fire_skill_btn = tk.Button(
             self, text="Fire Effect",
@@ -118,7 +119,16 @@ class MainScene(tk.Frame):
             bg="#8a2be2", fg="white",
             command=self.start_lightsaber
         )
-        self.lightsaber_btn.place(relx=0.5, rely=0.80)
+        self.lightsaber_btn.place(relx=0.47, rely=0.80)
+
+        self.fingershot_btn = tk.Button(
+            self, text="finger Shot",
+            font=("Arial", 20, "bold"),
+            bg="#8a2be2", fg="white",
+            command=self.start_handgun_skill
+        )
+        self.fingershot_btn.place(relx=0.65, rely=0.80)
+
 
         self.stop_btn = tk.Button(
             self, text="Stop",
@@ -126,7 +136,7 @@ class MainScene(tk.Frame):
             bg="#c0392b", fg="white",
             command=self.stop_skill
         )
-        self.stop_btn.place(relx=0.9, rely=0.80)
+        self.stop_btn.place(relx=0.84, rely=0.80)
 
         # 상태
         self.update_fn = None
@@ -136,7 +146,7 @@ class MainScene(tk.Frame):
         vx = self.video_label.winfo_x()
         vy = self.video_label.winfo_y()
         vw = self.video_label.winfo_width()
-        self.settings_btn.place(x=vx + vw - 100, y=vy + 10)
+        self.settings_btn.place(x=vx + vw - 150, y=vy + 10)
 
     def start_energy_skill(self):
         # 먼저 확실하게 초기화
@@ -201,6 +211,22 @@ class MainScene(tk.Frame):
         self.running = True
         self.update_video()
 
+    def start_handgun_skill(self):
+        self.stop_skill()
+        try:
+            # 예: 초기 히트박스 1개
+            hitboxes = [(300, 280, 180, 90)]
+            self.update_fn = run_hand_gun_skill_tk(
+                self.video_label,
+                cam_index=self.master.cam_index,
+                mirror=self.master.mirror_on,
+                hitboxes=hitboxes
+            )
+        except Exception as e:
+            print("Camera start error:", e)
+            return
+        self.running = True
+        self.update_video()
 
     def update_video(self):
         # after 루프가 중복되거나 고아 프로세스 되는 걸 방지
