@@ -16,7 +16,7 @@ DEVICE = "AUTO"
 CONF_KPT = 0.2
 MAX_HANDS = 4
 
-ANIM_DIR_GLOB = "hand_anim/eff_1PNG/*.png"
+ANIM_DIR_GLOB = "hand_anim/energy/*.png"
 ANIM_SIZE = (160, 160)
 ANIM_SPEED = 2
 DEBOUNCE_N = 2

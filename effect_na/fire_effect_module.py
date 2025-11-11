@@ -19,7 +19,7 @@ CONF_KPT = 0.2
 MAX_HANDS = 4
 MIRROR = False
 
-ANIM_DIR_GLOB = "animation/*.png"
+ANIM_DIR_GLOB = "hand_anim/fire/*.png"
 ANIM_SIZE = (160, 160)
 ANIM_SPEED = 2
 DEBOUNCE_N = 1
