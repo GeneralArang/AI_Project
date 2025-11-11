@@ -17,11 +17,12 @@ MODEL_XML = "intel/human-pose-estimation-0005/FP32/human-pose-estimation-0005.xm
 DEVICE = "AUTO"
 CONF_KPT = 0.2
 MAX_HANDS = 4
+MIRROR = False
 
 ANIM_DIR_GLOB = "animation/*.png"
 ANIM_SIZE = (160, 160)
 ANIM_SPEED = 2
-DEBOUNCE_N = 2
+DEBOUNCE_N = 1
 
 POSE_PAIRS = (
     (15, 13), (13, 11), (16, 14), (14, 12), (11, 12), (5, 11), (6, 12), (5, 6),
@@ -137,40 +138,100 @@ def detect_fist_ratio(lm, w, h):
     if avg>0.80: return "open"
     return "unknown"
 
+def detect_index_up(lm, w, h):
+    # 검지 끝과 MCP 거리 / 손목 기준으로 ratio 계산
+    wx, wy = lm.landmark[0].x*w, lm.landmark[0].y*h  # 손목
+    tip_x, tip_y = lm.landmark[8].x*w, lm.landmark[8].y*h  # 검지 끝
+    mcp_x, mcp_y = lm.landmark[5].x*w, lm.landmark[5].y*h   # 검지 MCP
+    
+    d_tip_mcp = ((tip_x - mcp_x)**2 + (tip_y - mcp_y)**2)**0.5
+    d_mcp_wrist = ((mcp_x - wx)**2 + (mcp_y - wy)**2)**0.5
+    
+    ratio = d_tip_mcp / max(d_mcp_wrist, 1e-5)
+    return ratio > 1.2  # 임계값, 필요시 조정
+
 class RightHandSkill:
     def __init__(self):
-        self.prev="open"
-        self.active=False
-        self.frame_idx=0
-        self.last="unknown"
-        self.streak=0
+        self.prev = "unknown"
+        self.active = False
+        self.frame_idx = 0
+        self.last = "unknown"
+        self.streak = 0
+        self.skill_ready = False
+        self.cooldown = 0
+        self.auto_mirror = None   # 자동 좌표 보정용
+        self.prev_x = None
 
     def stable(self, label):
-        if label==self.last:
-            self.streak+=1
+        if label == self.last:
+            self.streak += 1
         else:
-            self.last=label
-            self.streak=1
-        return label if self.streak>=DEBOUNCE_N else "unknown"
+            self.last = label
+            self.streak = 1
+        return label if self.streak >= DEBOUNCE_N else "unknown"
 
-    def update(self,label):
-        if self.prev=="fist" and label=="open":
-            self.active=True
-            self.frame_idx=0
-        if label!="unknown":
-            self.prev=label
+    def calibrate_mirror(self, lm, w):
+        """손 움직임 기반으로 자동 mirror 방향 감지"""
+        px = int(lm.landmark[8].x * w)
+        if self.prev_x is not None:
+            diff = px - self.prev_x
+            # 손가락을 오른쪽으로 움직였는데 화면상 왼쪽으로 가면 반전 필요
+            if abs(diff) > 10:
+                if diff < 0:
+                    self.auto_mirror = True
+                else:
+                    self.auto_mirror = False
+        self.prev_x = px
 
-    def draw(self,frame,lm,w,h):
-        if not self.active: return
-        px,py=get_palm_center(lm,w,h)
-        png=ANIM_FRAMES[(self.frame_idx*ANIM_SPEED)%len(ANIM_FRAMES)]
-        overlay_energy(frame,png,int(px),int(py))
-        self.frame_idx+=1
-        if (self.frame_idx*ANIM_SPEED)>=len(ANIM_FRAMES):
-            self.active=False
+    def update(self, label, index_up=False):
+        if self.cooldown > 0:
+            self.cooldown -= 1
 
+        if label == "fist":
+            self.skill_ready = True
+        if label == "open":
+            self.skill_ready = False
+
+        if self.skill_ready and index_up and not self.active and self.cooldown == 0:
+            print("🔥 검지 스킬 발동!")
+            self.active = True
+            self.frame_idx = 0
+            self.cooldown = 20
+
+        if label != "unknown":
+            self.prev = label
+
+    def draw(self, frame, lm, w, h, mirror=False):
+        if not self.active:
+            return
+
+        px = int(lm.landmark[8].x * w)
+        py = int(lm.landmark[8].y * h)
+
+        # 좌우 반전 적용
+        if self.auto_mirror is None:
+            self.calibrate_mirror(lm, w)
+        elif self.auto_mirror:
+            px = w - px
+
+        if mirror:
+            px = w - px
+
+        # 불 위치를 검지 끝 위로 올리기 (반전 이후 적용)
+        offset_y = 75
+        py -= offset_y
+
+        if not ANIM_FRAMES:
+            return
+
+        png = ANIM_FRAMES[(self.frame_idx * ANIM_SPEED) % len(ANIM_FRAMES)]
+        overlay_energy(frame, png, px, py)
+
+        self.frame_idx += 1
+        if (self.frame_idx * ANIM_SPEED) >= len(ANIM_FRAMES):
+            self.active = False
 # =========================
-#  GUI에서 호출할 함수
+# ✅ GUI에서 호출할 함수
 # =========================
 def run_fire_skill(video_label, cam_index=0, mirror=False):
     pose = OpenVinoPose()
@@ -183,6 +244,9 @@ def run_fire_skill(video_label, cam_index=0, mirror=False):
         nonlocal prev
         ok, frame = cap.read()
         if not ok:
+            print("[warning] 카메라 프레임 읽기 실패, 재시도 중...")
+            cap.release()
+            cap = cv2.VideoCapture(cam_index)
             return
 
         if mirror:
@@ -204,7 +268,7 @@ def run_fire_skill(video_label, cam_index=0, mirror=False):
         if res.multi_hand_landmarks:
             for lm,hd in zip(res.multi_hand_landmarks,res.multi_handedness):
 
-                #  손 랜드마크 시각화
+                # ✅ 손 랜드마크 시각화
                 hands.drawer.draw_landmarks(
                     frame,
                     lm,
@@ -213,15 +277,16 @@ def run_fire_skill(video_label, cam_index=0, mirror=False):
                     hands.drawer.DrawingSpec(color=(0,255,0), thickness=2)
                 )
 
-                #  오른손만 사용
+                # ✅ 오른손만 사용
                 label = hd.classification[0].label.lower().strip()
                 if label != "right":
                     continue
 
-                raw = detect_fist_ratio(lm,w,h)
+                raw = detect_fist_ratio(lm, w, h)
+                index_up = detect_index_up(lm, w, h)
                 stable = skill.stable(raw)
-                skill.update(stable)
-                skill.draw(frame,lm,w,h)
+                skill.update(stable, index_up=index_up)
+                skill.draw(frame, lm, w, h, mirror=mirror)
 
         # output to GUI
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -249,7 +314,7 @@ def run_fire_skill_tk(video_label, cam_index=0, mirror=False):
 
         h, w = frame.shape[:2]
 
-        #  Pose (OpenVINO)
+        # ✅ Pose (OpenVINO)
         out = pose.infer(frame)
         kpts = pose.extract_keypoints(out, w, h)
         for a, b in POSE_PAIRS:
@@ -258,7 +323,7 @@ def run_fire_skill_tk(video_label, cam_index=0, mirror=False):
                 if ka.conf > CONF_KPT and kb.conf > CONF_KPT:
                     cv2.line(frame, (ka.x, ka.y), (kb.x, kb.y), (0, 255, 0), 2)
 
-        #  MediaPipe Hands
+        # ✅ MediaPipe Hands
         res = hands.process(frame)
         if res.multi_hand_landmarks:
             for lm, hd in zip(res.multi_hand_landmarks, res.multi_handedness):
@@ -271,11 +336,12 @@ def run_fire_skill_tk(video_label, cam_index=0, mirror=False):
 
                 if hd.classification[0].label.lower().strip() == "right":
                     raw = detect_fist_ratio(lm, w, h)
+                    index_up = detect_index_up(lm, w, h)  # 👈 추가
                     stable = skill.stable(raw)
-                    skill.update(stable)
-                    skill.draw(frame, lm, w, h)
+                    skill.update(stable, index_up=index_up)
+                    skill.draw(frame, lm, w, h, mirror=mirror)
 
-        #  Tkinter 출력 부분 (핵심 변경)
+        # ✅ Tkinter 출력 부분 (핵심 변경)
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         img = Image.fromarray(rgb)
         imgtk = ImageTk.PhotoImage(image=img)
