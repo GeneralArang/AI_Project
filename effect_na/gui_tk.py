@@ -103,7 +103,7 @@ class MainScene(tk.Frame):
             bg="#8a2be2", fg="white",
             command=self.start_energy_skill
         )
-        self.energy_skill_btn.place(relx=0.05, rely=0.80)
+        self.energy_skill_btn.place(relx=0.086, rely=0.80)
 
         self.fire_skill_btn = tk.Button(
             self, text="Fire Effect",
@@ -119,7 +119,7 @@ class MainScene(tk.Frame):
             bg="#8a2be2", fg="white",
             command=self.start_lightsaber
         )
-        self.lightsaber_btn.place(relx=0.5, rely=0.80)
+        self.lightsaber_btn.place(relx=0.47, rely=0.80)
 
         self.fingershot_btn = tk.Button(
             self, text="finger Shot",
@@ -127,7 +127,7 @@ class MainScene(tk.Frame):
             bg="#8a2be2", fg="white",
             command=self.start_handgun_skill
         )
-        self.fingershot_btn.place(relx=0.7, rely=0.80)
+        self.fingershot_btn.place(relx=0.65, rely=0.80)
 
 
         self.stop_btn = tk.Button(
@@ -136,7 +136,7 @@ class MainScene(tk.Frame):
             bg="#c0392b", fg="white",
             command=self.stop_skill
         )
-        self.stop_btn.place(relx=0.9, rely=0.80)
+        self.stop_btn.place(relx=0.84, rely=0.80)
 
         # 상태
         self.update_fn = None
@@ -146,7 +146,7 @@ class MainScene(tk.Frame):
         vx = self.video_label.winfo_x()
         vy = self.video_label.winfo_y()
         vw = self.video_label.winfo_width()
-        self.settings_btn.place(x=vx + vw - 100, y=vy + 10)
+        self.settings_btn.place(x=vx + vw - 150, y=vy + 10)
 
     def start_energy_skill(self):
         # 먼저 확실하게 초기화
