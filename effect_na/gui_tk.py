@@ -7,6 +7,7 @@ from energy_skill_handfix import run_energy_skill_tk
 from HHL_handfixed_module import run_lightsaber_tk 
 from fire_effect_module import run_fire_skill_tk 
 from finger_shot import run_hand_gun_skill_tk
+from flashlight_module import run_flashlight_skill_tk
 
 class App(tk.Tk):
     def __init__(self):
@@ -138,6 +139,14 @@ class MainScene(tk.Frame):
         )
         self.stop_btn.place(relx=0.84, rely=0.80)
 
+        self.flashlight_btn = tk.Button(
+            self, text="Flashlight",
+            font=("Arial", 20, "bold"),
+            bg="#8a2be2", fg="white",
+            command=self.start_flashlight_skill
+        )
+        self.flashlight_btn.place(relx=0.086, rely=0.88)
+
         # 상태
         self.update_fn = None
         self.running = False
@@ -221,6 +230,20 @@ class MainScene(tk.Frame):
                 cam_index=self.master.cam_index,
                 mirror=self.master.mirror_on,
                 hitboxes=hitboxes
+            )
+        except Exception as e:
+            print("Camera start error:", e)
+            return
+        self.running = True
+        self.update_video()
+
+    def start_flashlight_skill(self):
+        self.stop_skill()
+        try:
+            self.update_fn = run_flashlight_skill_tk(
+                self.video_label,
+                cam_index=self.master.cam_index,
+                mirror=self.master.mirror_on,
             )
         except Exception as e:
             print("Camera start error:", e)
